@@ -1,0 +1,79 @@
+const { SlashCommandBuilder, ChannelType } = require('discord.js');
+const { createAudioPlayer, createAudioResource, joinVoiceChannel, getVoiceConnection,AudioPlayerStatus,VoiceConnectionStatus,entersState  } = require('@discordjs/voice');
+const { join } = require('path');
+const wait = require('node:timers/promises').setTimeout;
+module.exports = {
+	data: new SlashCommandBuilder()
+		.setName('speak')
+        .setDescription('type what you want me to speak in Japanese')
+		.addStringOption(option => option.setName('message').setDescription('TEST').setRequired(true))
+        .addChannelOption((option) => option.setName('channel')
+            .setDescription('Voice channel to join')
+            .setRequired(true)
+            .addChannelTypes(ChannelType.GuildVoice))
+        ,
+	async execute(interaction) {
+        interaction.deferReply()
+        const spawn = require("child_process").spawn;
+        console.log(interaction.options.getString('message'));
+        var process = spawn('python',["./tts.py",
+                            interaction.options.getString('message')] );
+        
+        // Takes stdout data from script which executed
+        // with arguments and send this data to res object
+        process.stdout.pipe(process.stdout)
+        process.stdout.on('exit', function(data) {
+            
+        } );
+        await wait(10000);
+        const player = createAudioPlayer();
+        const voiceChannel = interaction.options.getChannel('channel');
+		const voiceConnection = joinVoiceChannel({  
+            channelId : voiceChannel.id,
+            guildId: interaction.guildId,
+            adapterCreator: interaction.guild.voiceAdapterCreator,
+        });
+        
+        const connection = getVoiceConnection(interaction.guild.id);
+        const resource = createAudioResource('E:/yuyuyu/temp.ogg');
+        try {
+
+            await Promise.race([
+                entersState(voiceConnection, VoiceConnectionStatus.Signalling, 5_000),
+                entersState(voiceConnection, VoiceConnectionStatus.Connecting, 5_000),
+                entersState(voiceConnection , VoiceConnectionStatus.Ready, 10000)
+            ]);
+            console.log("Connected: " + voiceChannel.guild.name);
+            
+            } catch (error) {
+            
+            console.log("Voice Connection not ready within 5s.", error);
+            
+            return null;
+            
+            }
+        connection.subscribe(player);
+        console.log("Hai");
+        interaction.editReply("Going to speak " + interaction.options.getString('message'));
+        player.play(resource);
+        player.on(AudioPlayerStatus.Playing, () => {
+            console.log('The audio player has started playing!');
+        });
+        player.on(AudioPlayerStatus.Idle, () => {
+            connection.destroy();
+        });
+        player.on('error', error => {
+            console.error(`Error: ${error.message} with resource ${error.resource.metadata.title}`);
+        });
+        
+
+        //const pythonProcess = spawn('python',['tts/tts.py', [interaction.options.getString('message')]);
+        //child.on('exit', function() {
+        //    process.exit()
+        //})
+        //pythonProcess.stdout.on('data', function(data) {
+//
+        //});
+        
+	},
+};
